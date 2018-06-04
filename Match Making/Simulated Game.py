@@ -19,7 +19,7 @@ from datetime import datetime
 import time
 
 #Number of players
-N = 12
+N = 6
 pause = False
 
 #For debugging, select what you want printed then print
@@ -56,9 +56,21 @@ class player(object):
   def location(self):
     return "Player located at (" + str(self.x) + "," + str(self.y) + ")"
 
+  def takeAim(self, opponents):
+    #get mindistance to each opponent, keep lowest and direction
+    minDistance = 20
 
-  #def __del__(self):
-    #print("Player, team " + str(self.side) + ",  at (" + str(self.x) + "," + str(self.y) + ") was removed")
+    for i, opponent in enumerate(opponents):
+      opponentDistance = math.sqrt( (self.x - opponent.x) ** 2 + (self.y - opponent.y) ** 2)
+      if opponentDistance < minDistance:
+        minDistance = opponentDistance
+        self.aimX = opponent.x
+        self.aimY = opponent.y
+        self.aimMomX = opponent.velx
+        self.aimMomY = opponent.vely
+
+    verbose(False, "Player " + str(self.slot) + " (" + str(self.side) + ") at (" + str(round(self.x,2)) + "," + str(round(self.y,2)) + ") took aim at (" + str(round(self.aimX,2)) + "," + str(round(self.aimY,2)) + ")" )
+
   def move(self):
     #move randomly
       if np.random.random_sample() < 0.95:
@@ -176,6 +188,7 @@ k1 = 0
 k2 = 0
 
 #Animation function, called sequentially 
+#|will have to make this a repeatable function w/ stop animation
 def animate(i):
   #Create the lazers
   class laser(object):
@@ -227,18 +240,27 @@ def animate(i):
     lasersT1 = moveLasers(lasersT1)
     lasersT2 = moveLasers(lasersT2)
 
+    #Take aim, find closets opponent and direction
+    for j, player in enumerate(playersT1):
+      playersT1[j].takeAim(playersT2)
+    for j, player in enumerate(playersT2):
+      playersT2[j].takeAim(playersT1)
+
+    #every x frames players can shoot
+    #|add parameters to lasers to give them direction
+
     #Move players that were not hit
-    for i, player in enumerate(players):
-      temp = players[i].velx
-      players[i].move()
+    for j, player in enumerate(players):
+      temp = players[j].velx
+      players[j].move()
       
-      if (temp > 0 and players[i].velx < 0) or (temp < 0 and players[i].velx > 0):
-        verbose(False, "Creating laser, inital momentum (" + str(round(players[i].velx,1)) + "," + str(round(players[i].vely,1)) + ")")
-        verbose(False, "Making laser " + str(players[i].side) + " " + str(players[i].x) +  " " + str(players[i].y) )
-        if players[i].side == 0:
-            lasersT1 = np.concatenate((lasersT1, [laser(players[i].side, players[i].x, players[i].y, players[i].velx, players[i].vely)]))
+      if (temp > 0 and players[j].velx < 0) or (temp < 0 and players[j].velx > 0):
+        verbose(False, "Creating laser, inital momentum (" + str(round(players[j].velx,1)) + "," + str(round(players[j].vely,1)) + ")")
+        verbose(False, "Making laser " + str(players[j].side) + " " + str(players[j].x) +  " " + str(players[j].y) )
+        if players[j].side == 0:
+            lasersT1 = np.concatenate((lasersT1, [laser(players[j].side, players[j].x, players[j].y, players[j].velx, players[j].vely)]))
         else:
-            lasersT2 = np.concatenate((lasersT2, [laser(players[i].side, players[i].x, players[i].y, players[i].velx, players[i].vely)]))
+            lasersT2 = np.concatenate((lasersT2, [laser(players[j].side, players[j].x, players[j].y, players[j].velx, players[j].vely)]))
     
     #update laser array after checking for hits and creations
     lasers = np.concatenate((lasersT1,lasersT2))
@@ -261,8 +283,10 @@ def animate(i):
     #Check if the game is over
     if not playersT1.any(): 
       win_text.set_text("Red Team Wins")
+      #|Make it so game ends when this happens
     if not playersT2.any():
       win_text.set_text("Blue Team Wins!")
+      #|make it so game ends when this happens
 
     #helps with debugging run away errors
     time.sleep(0)
@@ -274,6 +298,7 @@ run_start = time.time()
 figure.canvas.mpl_connect('button_press_event', onClick)
 animator = animation.FuncAnimation(figure, animate, blit=False, repeat = True, frames = 200, interval = 20)
 
+#|Fix the saving function, do we need rasp pi?
 #animator.save('basic_animation.gif', fps=30, extra_args=['-vcodec', 'libx264'])
 plt.show()
 
