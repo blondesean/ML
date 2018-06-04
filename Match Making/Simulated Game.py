@@ -2,7 +2,7 @@
 Title Simulated Game
 Creator Sean Duncan
 Date 5/26/18
-
+---
 Purpose This is an animated + simulated game of dots that fight eachother 6v6 in square. 
 The dots are 'skilled' and have MMR that influences their chances of winning the game.
 The dots will use lasers to eliminate eachother, the team with the last dot/s standing wins.
