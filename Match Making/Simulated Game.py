@@ -265,6 +265,7 @@ def animate(i):
     #update laser array after checking for hits and creations
     lasers = np.concatenate((lasersT1,lasersT2))
 
+    #|add display targetting lines possibility
     #display lasers
     b1.set_data([laser.x for laser in lasersT1],
                [laser.y for laser in lasersT1])
