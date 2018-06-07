@@ -17,9 +17,11 @@ import math
 import matplotlib.patches as patches
 from datetime import datetime
 import time
+import sys
+import random
 
 #Number of players
-N = 6
+N = 12
 pause = False
 
 #For debugging, select what you want printed then print
@@ -27,25 +29,51 @@ def verbose(loudOption,printMe):
     if loudOption:
         print(printMe)
 
+#Used for aiming 
+def calcAngle(xPart, yPart):
+  a = round(math.degrees(math.atan(yPart/xPart)),0)
+  if xPart >= 0:
+    if yPart >= 0:
+      a = a
+    else:
+      a = a + 360
+  else:
+    if yPart >= 0:
+      a = a + 180
+    else:
+      a = a + 180
+
+  return a 
+
+#Shot angle calculator
+def calcShot(desired, adjustment):
+  newAngle = round(desired,0) + round(adjustment,0)
+  verbose(False, "Desired Angle = " + str(desired) + " off by = " + str(adjustment) + " new angle = " + str(newAngle))  
+  verbose(False, "X portion = " + str(round(np.cos(np.deg2rad(newAngle)),3)) + " Y portion = " + str(round(np.sin(np.deg2rad(newAngle)),3)))
+  return (round(np.cos(np.deg2rad(newAngle)),3), round(np.sin(np.deg2rad(newAngle)),3))
+
 #Lets the pause mechanic work
 def onClick(event):
     global pause
     pause ^= True
 
 #Create a player / dot
+#|Add health, elo, mmr
 class player(object):
-  def __init__(self, side, slot):
+  def __init__(self, side, slot, elo, mmr):
     #assign passed parameters to object
     self.side = side
     self.slot = slot
+    self.health = 3
+    self.elo = elo
+    self.mmr = mmr
 
     #blue starts up top, red below
     if self.side == 0:
-      self.y = 10 - (2 * np.random.random_sample()) - (2 * np.random.random_sample())
+      self.y = 10 - (2 * np.random.random_sample()) 
     else: 
-      self.y = (2 * np.random.random_sample()) + (2 * np.random.random_sample())
+      self.y = (2 * np.random.random_sample())
     self.x = 10 * np.random.random_sample()
-    #self.x = 3
     #give them a velocity
     self.velx = self.generate_new_vel()
     self.vely = self.generate_new_vel()
@@ -73,7 +101,7 @@ class player(object):
 
   def move(self):
     #move randomly
-      if np.random.random_sample() < 0.95:
+      if np.random.random_sample() < 0.8:
         self.x = self.x + self.velx
         self.y = self.y + self.vely
       else:
@@ -117,7 +145,7 @@ def examineDamage(characters, weapons):
 
     for j, laser in enumerate(weapons):
       if math.sqrt( (characters[i-deleted].x - weapons[j-deleted].x) ** 2 + (characters[i-deleted].y - weapons[j-deleted].y) ** 2) < 0.15 and characters[i-deleted].side != weapons[j-deleted].side:
-        verbose(True, "\\/\\/\\/Player, team " + str(characters[i-deleted].side) + ",  at (" + str(round(characters[i-deleted].x,1)) + "," + str(round(characters[i-deleted].y,1)) + ") was hit and removed")
+        verbose(True, "\\/\\/\\/Player #" + str(characters[i-deleted].slot) + ", team #" + str(characters[i-deleted].side) + ",  at (" + str(round(characters[i-deleted].x,1)) + "," + str(round(characters[i-deleted].y,1)) + ") was hit and removed")
         verbose(True, "There are " + str(len(characters)) + " characters and " + str(len(weapons)) + " weapons")
         verbose(True, "/\\/\\/\\Deleting character " + str(i) + " and weapon " + str(j))
         characters = np.delete(characters, i-deleted)
@@ -142,11 +170,14 @@ def moveLasers(weapons):
 
     return weapons
 
-###Start the simulation
+def randInt(range):
+  return (1 + math.floor(range * np.random.random_sample()))
 
+###Start the simulation
 #Initialize players
-playersT1 = np.array([player(0, i) for i in xrange(N/2)])
-playersT2 = np.array([player(1, i) for i in xrange(N/2)])
+#|add 2d array (or nd array structure)
+playersT1 = np.array([player(0, i, randInt(100), randInt(10)) for i in xrange(N/2)])
+playersT2 = np.array([player(1, i, randInt(100), randInt(10)) for i in xrange(N/2)])
 players = np.concatenate((playersT1,playersT2))
 lasersT1 = np.array([])
 lasersT2 = np.array([])
@@ -192,8 +223,10 @@ k2 = 0
 def animate(i):
   #Create the lazers
   class laser(object):
-    _globVar1 = None
-    def __init__(self, side, x, y, momX, momY):
+    def __init__(self, side, x, y, momX, momY, playerElo, playerAimX, playerAimY, playerAimMomX, playerAimMomY):
+
+      #Bullet speed factor
+      speedFactor = 4
 
       #initial position
       self.side = side
@@ -201,14 +234,35 @@ def animate(i):
       self.y = y
       self.initMomX = momX
       self.initMomY = momY
+      self.playerElo = playerElo
+      self.playerAimX = playerAimX
+      self.playerAimY = playerAimY
+      self.playerAimMomX = playerAimMomX
+      self.playerAimMomY = playerAimMomY
 
       #blue shoots down, red shoots up
+      xLeg = playerAimX - self.x
+      yLeg = playerAimY - self.y
+      desiredAngle = calcAngle(xLeg, yLeg)
+      rando = random.randint(-60,60)
+      inaccuracy = rando * (1 - playerElo / 100)
+      
+      verbose(False, "Side " + str(self.side) + " aim X " + str(round(playerAimX,2)) + " aim Y " + str(round(playerAimY,2)) )
+      verbose(False, "Side " + str(self.side) + " leg X " + str(round(xLeg,2)) + " leg Y " + str(round(yLeg,2)) )
+      verbose(False, "Side " + str(self.side) + " elo = " + str(playerElo) + " angle determined to be " + str(desiredAngle))
+      verbose(False, "Side " + str(self.side) + " rando = " + str(rando) + " should be off by " + str(round(inaccuracy,2)) + " degrees." )
+      shotX, shotY = calcShot(desiredAngle, inaccuracy)
+      normFactor = abs(shotX) + abs(shotY)
+      self.velx = shotX / normFactor / speedFactor
+      self.vely = shotY / normFactor / speedFactor
+      '''
       if self.side == 0:
         self.vely = -0.15+self.initMomY
       else:
         self.vely = 0.15+self.initMomY
 
       self.velx = self.initMomX
+      '''
 
     def shoot(self):
       #straight line
@@ -249,11 +303,18 @@ def animate(i):
     #every x frames players can shoot
     #|add parameters to lasers to give them direction
 
-    #Move players that were not hit
+    #Move players that were not hit and shoot if mmr allows
     for j, player in enumerate(players):
       temp = players[j].velx
       players[j].move()
-      
+      verbose(False, "Testing laser generation side " + str(players[j].side) + " #" + str(players[j].slot) + " at (" + str(round(players[j].x,1)) +  "," + str(round(players[j].y,1)) + ") | i = " + str(i) + " and mmr = " + str(players[j].mmr) + " so mod = " + str(i % players[j].mmr))
+      if (i % (7 * players[j].mmr)) == 0:
+        verbose(False, "Generating laser side " + str(players[j].side) + " #" + str(players[j].slot) + " at (" + str(round(players[j].x,1)) +  "," + str(round(players[j].y,1)) + ") | i = " + str(i) + " and mmr = " + str(players[j].mmr))
+        if players[j].side == 0:
+            lasersT1 = np.concatenate((lasersT1, [laser(players[j].side, players[j].x, players[j].y, players[j].velx, players[j].vely, players[j].elo, players[j].aimX, players[j].aimY, players[j].aimMomX, players[j].aimMomY)]))
+        else:
+            lasersT2 = np.concatenate((lasersT2, [laser(players[j].side, players[j].x, players[j].y, players[j].velx, players[j].vely, players[j].elo, players[j].aimX, players[j].aimY, players[j].aimMomX, players[j].aimMomY)]))
+      '''
       if (temp > 0 and players[j].velx < 0) or (temp < 0 and players[j].velx > 0):
         verbose(False, "Creating laser, inital momentum (" + str(round(players[j].velx,1)) + "," + str(round(players[j].vely,1)) + ")")
         verbose(False, "Making laser " + str(players[j].side) + " " + str(players[j].x) +  " " + str(players[j].y) )
@@ -261,7 +322,8 @@ def animate(i):
             lasersT1 = np.concatenate((lasersT1, [laser(players[j].side, players[j].x, players[j].y, players[j].velx, players[j].vely)]))
         else:
             lasersT2 = np.concatenate((lasersT2, [laser(players[j].side, players[j].x, players[j].y, players[j].velx, players[j].vely)]))
-    
+      '''
+
     #update laser array after checking for hits and creations
     lasers = np.concatenate((lasersT1,lasersT2))
 
@@ -283,7 +345,7 @@ def animate(i):
 
     #Check if the game is over
     if not playersT1.any(): 
-      win_text.set_text("Red Team Wins")
+      win_text.set_text("Red Team Wins!")
       #|Make it so game ends when this happens
     if not playersT2.any():
       win_text.set_text("Blue Team Wins!")
