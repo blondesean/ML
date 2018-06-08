@@ -21,7 +21,7 @@ import sys
 import random
 
 #Number of players
-N = 12
+N = 2
 pause = False
 
 #For debugging, select what you want printed then print
@@ -64,7 +64,7 @@ class player(object):
     #assign passed parameters to object
     self.side = side
     self.slot = slot
-    self.health = 3
+    self.health = 1
     self.elo = elo
     self.mmr = mmr
 
@@ -101,7 +101,7 @@ class player(object):
 
   def move(self):
     #move randomly
-      if np.random.random_sample() < 0.8:
+      if np.random.random_sample() < 0.9:
         self.x = self.x + self.velx
         self.y = self.y + self.vely
       else:
@@ -138,19 +138,25 @@ class player(object):
         self.velx = -1 * self.vely
 
 def examineDamage(characters, weapons):
-  deleted = 0
+  deletedW = 0
+  deletedC = 0
 
   #check for collisions loop through lasers then players
   for i, player in enumerate(characters):
 
     for j, laser in enumerate(weapons):
-      if math.sqrt( (characters[i-deleted].x - weapons[j-deleted].x) ** 2 + (characters[i-deleted].y - weapons[j-deleted].y) ** 2) < 0.15 and characters[i-deleted].side != weapons[j-deleted].side:
-        verbose(True, "\\/\\/\\/Player #" + str(characters[i-deleted].slot) + ", team #" + str(characters[i-deleted].side) + ",  at (" + str(round(characters[i-deleted].x,1)) + "," + str(round(characters[i-deleted].y,1)) + ") was hit and removed")
-        verbose(True, "There are " + str(len(characters)) + " characters and " + str(len(weapons)) + " weapons")
-        verbose(True, "/\\/\\/\\Deleting character " + str(i) + " and weapon " + str(j))
-        characters = np.delete(characters, i-deleted)
-        weapons = np.delete(weapons, j-deleted)
-        deleted = deleted + 1
+      if math.sqrt( (characters[i-deletedC].x - weapons[j-deletedW].x) ** 2 + (characters[i-deletedC].y - weapons[j-deletedW].y) ** 2) < 0.15 and characters[i-deletedC].side != weapons[j-deletedW].side:
+        #Take one point of damage
+        verbose(False, "Player #" + str(characters[i-deletedC].slot) + ", team #" + str(characters[i-deletedC].side) + ",  at (" + str(round(characters[i-deletedC].x,1)) + "," + str(round(characters[i-deletedC].y,1)) + ") was hit and took damage.")
+        characters[i-deletedC].health = characters[i-deletedC].health - 1
+        weapons = np.delete(weapons, j-deletedW)
+        deletedW = deletedW + 1
+        if characters[i-deletedC].health == 0:
+          verbose(False, "\\/\\/\\/Player #" + str(characters[i-deletedC].slot) + ", team #" + str(characters[i-deletedC].side) + ",  at (" + str(round(characters[i-deletedC].x,1)) + "," + str(round(characters[i-deletedC].y,1)) + ") was hit and ran out of health so they were removed")
+          verbose(False, "There are " + str(len(characters)) + " characters and " + str(len(weapons)) + " weapons")
+          verbose(False, "/\\/\\/\\Deleting character " + str(i) + " and weapon " + str(j))
+          characters = np.delete(characters, i-deletedC)
+          deletedC = deletedC + 1
         break
 
   return (characters, weapons)
@@ -173,15 +179,30 @@ def moveLasers(weapons):
 def randInt(range):
   return (1 + math.floor(range * np.random.random_sample()))
 
+def playerSkillInfo(players, team):
+  totElo = 0
+  totMMR = 0 
+  for j, player in enumerate(players):
+    verbose(True, "Player #" + str(players[j].slot) + ", team #" + str(players[j].side) + ",  has elo = " + str(round(players[j].elo,0)) + ", and mmr = " + str(round(players[j].mmr,0)))
+    totElo += players[j].elo
+    totMMR += players[j].mmr
+
+  verbose(True, "Team " + str(team) + " total elo = " + str(totElo) + " and total mmr = " + str(totMMR))
+
 ###Start the simulation
 #Initialize players
 #|add 2d array (or nd array structure)
 playersT1 = np.array([player(0, i, randInt(100), randInt(10)) for i in xrange(N/2)])
+playersT1 = np.array([player(0, i, 100, 1) for i in xrange(N/2)])
 playersT2 = np.array([player(1, i, randInt(100), randInt(10)) for i in xrange(N/2)])
 players = np.concatenate((playersT1,playersT2))
 lasersT1 = np.array([])
 lasersT2 = np.array([])
 lasers = np.array([])
+
+#Summary player skill info
+playerSkillInfo(playersT1,0)
+playerSkillInfo(playersT2,1)
     
 #Animation plot parameters
 figure = plt.figure()
@@ -214,9 +235,9 @@ time_template = 'Time = %.1f s'
 time_text = axes.text(.43, 0.92, '', transform=axes.transAxes)
 win_text = axes.text(.42,.08, '', transform = axes.transAxes)
 
-#track deaths
-k1 = 0
-k2 = 0
+#Track winner
+winner = "None"
+lastFrame = 9999
 
 #Animation function, called sequentially 
 #|will have to make this a repeatable function w/ stop animation
@@ -244,9 +265,8 @@ def animate(i):
       xLeg = playerAimX - self.x
       yLeg = playerAimY - self.y
       desiredAngle = calcAngle(xLeg, yLeg)
-      rando = random.randint(-60,60)
+      rando = random.randint(-90,90)
       inaccuracy = rando * (1 - playerElo / 100)
-      
       verbose(False, "Side " + str(self.side) + " aim X " + str(round(playerAimX,2)) + " aim Y " + str(round(playerAimY,2)) )
       verbose(False, "Side " + str(self.side) + " leg X " + str(round(xLeg,2)) + " leg Y " + str(round(yLeg,2)) )
       verbose(False, "Side " + str(self.side) + " elo = " + str(playerElo) + " angle determined to be " + str(desiredAngle))
@@ -255,14 +275,6 @@ def animate(i):
       normFactor = abs(shotX) + abs(shotY)
       self.velx = shotX / normFactor / speedFactor
       self.vely = shotY / normFactor / speedFactor
-      '''
-      if self.side == 0:
-        self.vely = -0.15+self.initMomY
-      else:
-        self.vely = 0.15+self.initMomY
-
-      self.velx = self.initMomX
-      '''
 
     def shoot(self):
       #straight line
@@ -274,12 +286,14 @@ def animate(i):
     global lasersT1
     global lasersT2
     global lasers
-    global laser 
-    global run_start
-    global pause
     global playersT1
     global playersT2
     global players
+    global run_start
+    global pause
+    global winner
+    global lastFrame
+    global plt
 
     #Set time
     t = time.time() - run_start
@@ -300,29 +314,17 @@ def animate(i):
     for j, player in enumerate(playersT2):
       playersT2[j].takeAim(playersT1)
 
-    #every x frames players can shoot
-    #|add parameters to lasers to give them direction
-
     #Move players that were not hit and shoot if mmr allows
     for j, player in enumerate(players):
       temp = players[j].velx
       players[j].move()
       verbose(False, "Testing laser generation side " + str(players[j].side) + " #" + str(players[j].slot) + " at (" + str(round(players[j].x,1)) +  "," + str(round(players[j].y,1)) + ") | i = " + str(i) + " and mmr = " + str(players[j].mmr) + " so mod = " + str(i % players[j].mmr))
-      if (i % (7 * players[j].mmr)) == 0:
+      if (i % (5 * players[j].mmr)) == 0:
         verbose(False, "Generating laser side " + str(players[j].side) + " #" + str(players[j].slot) + " at (" + str(round(players[j].x,1)) +  "," + str(round(players[j].y,1)) + ") | i = " + str(i) + " and mmr = " + str(players[j].mmr))
         if players[j].side == 0:
             lasersT1 = np.concatenate((lasersT1, [laser(players[j].side, players[j].x, players[j].y, players[j].velx, players[j].vely, players[j].elo, players[j].aimX, players[j].aimY, players[j].aimMomX, players[j].aimMomY)]))
         else:
             lasersT2 = np.concatenate((lasersT2, [laser(players[j].side, players[j].x, players[j].y, players[j].velx, players[j].vely, players[j].elo, players[j].aimX, players[j].aimY, players[j].aimMomX, players[j].aimMomY)]))
-      '''
-      if (temp > 0 and players[j].velx < 0) or (temp < 0 and players[j].velx > 0):
-        verbose(False, "Creating laser, inital momentum (" + str(round(players[j].velx,1)) + "," + str(round(players[j].vely,1)) + ")")
-        verbose(False, "Making laser " + str(players[j].side) + " " + str(players[j].x) +  " " + str(players[j].y) )
-        if players[j].side == 0:
-            lasersT1 = np.concatenate((lasersT1, [laser(players[j].side, players[j].x, players[j].y, players[j].velx, players[j].vely)]))
-        else:
-            lasersT2 = np.concatenate((lasersT2, [laser(players[j].side, players[j].x, players[j].y, players[j].velx, players[j].vely)]))
-      '''
 
     #update laser array after checking for hits and creations
     lasers = np.concatenate((lasersT1,lasersT2))
@@ -343,18 +345,23 @@ def animate(i):
     p2.set_data([player.x for player in playersT2],
                 [player.y for player in playersT2])
 
-    #Check if the game is over
-    if not playersT1.any(): 
-      win_text.set_text("Red Team Wins!")
-      #|Make it so game ends when this happens
-    if not playersT2.any():
-      win_text.set_text("Blue Team Wins!")
-      #|make it so game ends when this happens
+  #Check if the game is over
+  if not playersT1.any() and lastFrame == 9999: 
+    lastFrame = i
+    win_text.set_text("Red Team Wins!")
+    winner = "RED" 
+  if not playersT2.any() and lastFrame == 9999:
+    lastFrame = i
+    win_text.set_text("Blue Team Wins!")
+    winner = "BLUE"
+  if i == lastFrame + 1:
+    time.sleep(1)
+    plt.close()
 
-    #helps with debugging run away errors
-    time.sleep(0)
+  #helps with debugging run away errors
+  time.sleep(0)
 
-    return (p1, p2, b1, b2,)
+  return (p1, p2, b1, b2,)
 
 #Call the animator, 
 run_start = time.time()
@@ -365,6 +372,7 @@ animator = animation.FuncAnimation(figure, animate, blit=False, repeat = True, f
 #animator.save('basic_animation.gif', fps=30, extra_args=['-vcodec', 'libx264'])
 plt.show()
 
+print("THE WINNER IS " + winner + "!")
 
 
 
